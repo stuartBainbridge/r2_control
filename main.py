@@ -19,6 +19,7 @@
 # along with R2_Control.  If not, see <http://www.gnu.org/licenses/>.
 # ===============================================================================
 from __future__ import print_function
+import glob
 import os
 import time
 import datetime
@@ -42,14 +43,15 @@ logfile = mainconfig.mainconfig['logfile']
 plugin_names = {
     'flthy': 'Lights.FlthyHPControl',
     'rseries': 'Lights.RSeriesLogicEngine',
-    'psi_matrix': 'Lights.PSI_Matrix',
     'Scripts': 'Scripts.ScriptControl',
     'Audio': 'Audio.AudioLibrary',
+    'Vocalizer': 'Audio.Vocalizer',
     'vader': 'Lights.VaderPSIControl',
     'teecees': 'Lights.TeeceesControl',
     'Dome': 'Dome',
     'GPIO': 'GPIO.GPIOControl',
-    'Smoke': 'Smoke'}
+    'Smoke': 'Smoke',
+    'Monitoring': 'Monitoring'}
 
 
 def list_joysticks():
@@ -67,19 +69,28 @@ def system_status():
     with open('/proc/uptime', 'r') as f:
         uptime_seconds = float(f.readline().split()[0])
         uptime_string = str(datetime.timedelta(seconds=uptime_seconds))
+    remote_battery = ""
     try:
-        with open('/sys/class/power_supply/sony_controller_battery_00:19:c1:5f:78:b9/capacity',
-                  'r') as b:
-            remote_battery = int(b.readline().split()[0])
+        controllers = glob.glob('/sys/class/power_supply/*')
+        if __debug__:
+            print("Controllers: %s" % controllers)
+        for controller in controllers: 
+            path = controller + "/capacity"
+            if __debug__:
+                print("Controller path: %s" % path)
+            with open(path,'r') as b:
+                remote_battery += str(int(b.readline().split()[0])) + " "
+                if __debug__:
+                    print("Remote battery: %s" % remote_battery)
     except:
-        remote_battery = 0
+        remote_battery = ""
 
     status = "Current Status\n"
     status += "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n"
     status += "Uptime: \t%s\n" % uptime_string
-    if "monitor" in modules:
-        status += "Main Battery: \t%5.3f (balance: %5.3f)\n" % (monitor.queryBattery(),
-                                                                monitor.queryBatteryBalance())
+    if "Monitoring" in plugins:
+        status += "Main Battery: \t%5.3f (balance: %5.3f)\n" % (p['Monitoring'].monitoring.queryBattery(),
+                                                                p['Monitoring'].monitoring.queryBatteryBalance())
     status += "Remote Battery: %s%%\t\n" % remote_battery
     status += "Wifi: \t\t\n"
     status += "Internet: \t%s \n" % internet.check()
@@ -102,7 +113,13 @@ def system_status_csv():
     except:
         remote_battery = 0
 
-    status = "%s,%s,%s,%s,%s,%s" % (uptime_string, monitor.queryBattery(), monitor.queryBatteryBalance(), remote_battery, internet.check(), p['Audio'].audio.ShowVolume())
+    battery = 0
+    batteryBalance = 0
+    if "Monitoring" in plugins:
+        battery = p['Monitoring'].monitoring.queryBattery()
+        batteryBalance = p['Monitoring'].monitoring.queryBatteryBalance()
+
+    status = "%s,%s,%s,%s,%s,%s" % (uptime_string, battery, batteryBalance, remote_battery, internet.check(), p['Audio'].audio.ShowVolume())
     return status
 
 # Setup logging
@@ -110,7 +127,7 @@ log_filename = logdir + '/' + logfile
 # Create target Directory if don't exist
 if not os.path.exists(logdir):
     os.mkdir(logdir)
-    print("Creating logdir " + logdir);
+    print("Creating logdir " + logdir)
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s',
                     filename=log_filename,
@@ -120,7 +137,16 @@ logging.info("**** Starting r2_control")
 
 ######################################
 # initialise modules
-
+print(mainconfig.mainconfig['telegram'])
+if mainconfig.mainconfig['telegram'] == "True":
+    # Enable telegram
+    if __debug__:
+        print("Enabled Telegram")
+    tg = telegram.Telegram()
+    if __debug__: 
+        print(tg)
+    tg.send("R2 Starting up....")
+    
 app = Flask(__name__, template_folder='templates')
 
 
@@ -136,9 +162,12 @@ def index():
 # Initialise server controllers
 from Hardware.Servo import ServoBlueprint
 from Hardware.Servo import ServoControl
+if __debug__:
+    print("Servos loading.... %s" % servos)
 for x in servos:
-    logging.info("Loading Servo Control Board: %s" % x)
-    app.register_blueprint(ServoBlueprint.construct_blueprint(x), url_prefix="/" + x)
+    if x != '':
+        logging.info("Loading Servo Control Board: %s" % x)
+        app.register_blueprint(ServoBlueprint.construct_blueprint(x), url_prefix="/" + x)
     
 p = {}
 for x in plugins:
@@ -197,11 +226,11 @@ def joystick_change(stick):
 def shutdown():
     """GET to shutdown Raspberry Pi"""
     logging.info("****** Shutting down ******")
-    if "telegram" in modules:
-        telegram.send("Night night...")
+    if mainconfig.mainconfig['telegram']:
+        tg.send("Night night...")
     if request.method == 'GET':
         os.system('shutdown now -h')
-        s = open("controllers/.shutdown", "w+")
+        s = open("/home/pi/.r2_config/.shutdown", "w+")
         s.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
         s.flush()
         s.close()
@@ -223,8 +252,8 @@ def sendstatus():
     """GET to send system status via telegram"""
     message = ""
     if request.method == 'GET':
-        if "telegram" in modules:
-            telegram.send(system_status())
+        if mainconfig.mainconfig['telegram']:
+            tg.send(system_status())
             message = "Sent"
         else:
             message = "Telegram module not configured"
