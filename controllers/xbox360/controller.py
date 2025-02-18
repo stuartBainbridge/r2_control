@@ -8,7 +8,6 @@ Partly inspired by the following libraries/codes:
 import os
 import select
 import struct
-import sys
 import time
 import warnings
 from array import array
@@ -16,6 +15,9 @@ from collections import namedtuple
 from fcntl import ioctl
 from glob import glob
 from threading import Thread, Event
+
+# Too many lint/flake8 errors, so ignoring file for now.
+# flake8: noqa
 
 from xbox360controller.linux.input import *
 from xbox360controller.linux.input_event_codes import *

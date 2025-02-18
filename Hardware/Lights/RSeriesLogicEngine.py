@@ -1,17 +1,13 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from future import standard_library
-import smbus
-import os
-import datetime
-import time
-from r2utils import mainconfig
-from flask import Blueprint, request
-import configparser
-standard_library.install_aliases()
+""" Module to control RSeries lights or similar """
 from builtins import hex
 from builtins import object
-
+import os
+import configparser
+import smbus
+from flask import Blueprint, request
+from r2utils import mainconfig
+from future import standard_library
+standard_library.install_aliases()
 
 _configfile = mainconfig.mainconfig['config_dir'] + 'rseries.cfg'
 
@@ -22,7 +18,7 @@ _config.read(_configfile)
 
 if not os.path.isfile(_configfile):
     print("Config file does not exist")
-    with open(_configfile, 'wt') as configfile:
+    with open(_configfile, 'wt', encoding="utf-8") as configfile:
         _config.write(configfile)
 
 _defaults = _config.defaults()
@@ -38,7 +34,7 @@ def _rseries_raw(cmd):
     """ GET to send a raw command to the rseries system"""
     message = ""
     if request.method == 'GET':
-        message += _rseries.sendRaw(cmd)
+        message += _rseries.SendRaw(cmd)
     return message
 
 
@@ -51,28 +47,27 @@ class _RSeriesLogicEngine(object):
         self.logdir = logdir
         if __debug__:
             print("Initialising RSeries Control")
-            print("Address: %s | Bus: %s | logdir: %s | reeltwo: %s" % (self.address, self.bus, self.logdir, self.reeltwo))
+            print(f"Address: {self.address} | Bus: {self.bus} | logdir: {self.logdir} | reeltwo: {self.reeltwo}")
 
-    def sendRaw(self, cmd):
+    def SendRaw(self, cmd):
+        """ Send raw command """
         command = list(cmd)
-        hexCommand = list()
-        if self.reeltwo == True:
+        hexCommand = []
+        if self.reeltwo is True:
             if __debug__:
-               print("ReelTwo Mode");
+                print("ReelTwo Mode")
             hexCommand.append(int(hex(ord('L')), 16))
             hexCommand.append(int(hex(ord('E')), 16))
         for i in command:
             h = int(hex(ord(i)), 16)
-            hexCommand.append(h)	
+            hexCommand.append(h)
         if __debug__:
             print(hexCommand)
         try:
             self.bus.write_i2c_block_data(int(self.address, 16), hexCommand[0], hexCommand[1:])
-        except:
+        except Exception:
             print("Failed to send bytes")
         return "Ok"
 
 
 _rseries = _RSeriesLogicEngine(_defaults['address'], _defaults['logfile'], _config.getboolean('DEFAULT', 'reeltwo'))
-
-

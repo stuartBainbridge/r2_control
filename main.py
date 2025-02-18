@@ -18,19 +18,19 @@
 # You should have received a copy of the GNU General Public License
 # along with R2_Control.  If not, see <http://www.gnu.org/licenses/>.
 # ===============================================================================
-from __future__ import print_function
+from builtins import str
 import glob
 import os
 import time
 import datetime
 import logging
 import logging.handlers
-from future import standard_library
 from flask import Flask, request, render_template
 from r2utils import telegram, internet, mainconfig
+from Hardware.Servo import ServoBlueprint
+from future import standard_library
 standard_library.install_aliases()
-from builtins import str
-from configparser import ConfigParser
+
 
 plugins = mainconfig.mainconfig['plugins'].split(",")
 servos = mainconfig.mainconfig['servos'].split(",")
@@ -66,51 +66,52 @@ def list_joysticks():
 
 def system_status():
     """ Collects the system status and returns a formatted message """
-    with open('/proc/uptime', 'r') as f:
+    with open('/proc/uptime', 'r', encoding="utf-8") as f:
         uptime_seconds = float(f.readline().split()[0])
         uptime_string = str(datetime.timedelta(seconds=uptime_seconds))
     remote_battery = ""
     try:
         controllers = glob.glob('/sys/class/power_supply/*')
         if __debug__:
-            print("Controllers: %s" % controllers)
-        for controller in controllers: 
+            print(f"Controllers: {controllers}")
+        for controller in controllers:
             path = controller + "/capacity"
             if __debug__:
-                print("Controller path: %s" % path)
-            with open(path,'r') as b:
+                print(f"Controller path: {path}")
+            with open(path, 'r', encoding="utf-8") as b:
                 remote_battery += str(int(b.readline().split()[0])) + " "
                 if __debug__:
-                    print("Remote battery: %s" % remote_battery)
-    except:
+                    print(f"Remote battery: {remote_battery}")
+    except Exception:
         remote_battery = ""
 
     status = "Current Status\n"
     status += "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n"
-    status += "Uptime: \t%s\n" % uptime_string
+    status += f"Uptime: \t{uptime_string}\n"
     if "Monitoring" in plugins:
         status += "Main Battery: \t%5.3f (balance: %5.3f)\n" % (p['Monitoring'].monitoring.queryBattery(),
                                                                 p['Monitoring'].monitoring.queryBatteryBalance())
-    status += "Remote Battery: %s%%\t\n" % remote_battery
+    status += f"Remote Battery: {remote_battery}%\t\n"
     status += "Wifi: \t\t\n"
-    status += "Internet: \t%s \n" % internet.check()
+    status += f"Internet: \t{internet.check()} \n"
     status += "Location: \t\n"
-    status += "Volume: \t%s\n" % p['Audio'].audio.ShowVolume()
+    status += f"Volume: \t{p['Audio'].audio.ShowVolume()}\n"
     status += "--------------\n"
     status += "Scripts Running:\n"
     status += p['Scripts'].scripts.list_running()
     return status
 
+
 def system_status_csv():
     """ Collects the system status and returns a csv string """
-    with open('/proc/uptime', 'r') as f:
+    with open('/proc/uptime', 'r', encoding="utf-8") as f:
         uptime_seconds = float(f.readline().split()[0])
         uptime_string = str(datetime.timedelta(seconds=uptime_seconds))
     try:
         with open('/sys/class/power_supply/sony_controller_battery_00:19:c1:5f:78:b9/capacity',
-                  'r') as b:
+                  'r', encoding="utf-8") as b:
             remote_battery = int(b.readline().split()[0])
-    except:
+    except Exception:
         remote_battery = 0
 
     battery = 0
@@ -119,8 +120,9 @@ def system_status_csv():
         battery = p['Monitoring'].monitoring.queryBattery()
         batteryBalance = p['Monitoring'].monitoring.queryBatteryBalance()
 
-    status = "%s,%s,%s,%s,%s,%s" % (uptime_string, battery, batteryBalance, remote_battery, internet.check(), p['Audio'].audio.ShowVolume())
+    status = f"{uptime_string},{battery},{batteryBalance},{remote_battery},{internet.check()},{p['Audio'].audio.ShowVolume()}"
     return status
+
 
 # Setup logging
 log_filename = logdir + '/' + logfile
@@ -137,16 +139,15 @@ logging.info("**** Starting r2_control")
 
 ######################################
 # initialise modules
-print(mainconfig.mainconfig['telegram'])
 if mainconfig.mainconfig['telegram'] == "True":
     # Enable telegram
     if __debug__:
         print("Enabled Telegram")
     tg = telegram.Telegram()
-    if __debug__: 
+    if __debug__:
         print(tg)
     tg.send("R2 Starting up....")
-    
+
 app = Flask(__name__, template_folder='templates')
 
 
@@ -160,15 +161,13 @@ def index():
 
 
 # Initialise server controllers
-from Hardware.Servo import ServoBlueprint
-from Hardware.Servo import ServoControl
 if __debug__:
     print("Servos loading.... %s" % servos)
 for x in servos:
     if x != '':
-        logging.info("Loading Servo Control Board: %s" % x)
+        logging.info(f"Loading Servo Control Board: {x}")
         app.register_blueprint(ServoBlueprint.construct_blueprint(x), url_prefix="/" + x)
-    
+
 p = {}
 for x in plugins:
     logging.info("Loading %s" % x)
@@ -199,7 +198,7 @@ def joystick_current():
     """GET to display current joystick"""
     logging.info("Retrieving current joystick")
     if request.method == 'GET':
-        with open("controllers/.current", "r") as current_joy:
+        with open("controllers/.current", "r", encoding="utf-8") as current_joy:
             current = current_joy.read()
         return current
     return "Fail"
@@ -215,10 +214,8 @@ def joystick_change(stick):
             logging.info("Checking controller type is valid: " + valid)
             if valid == stick:
                 message = "Valid stick. Changed to " + stick
-                with open("controllers/.current", "w") as current_joy:
+                with open("controllers/.current", "w", encoding="utf-8") as current_joy:
                     current_joy.write(stick)
-                if "telegram" in modules:
-                    telegram.send("Setting joystick to " + stick)
     return message
 
 
@@ -230,7 +227,7 @@ def shutdown():
         tg.send("Night night...")
     if request.method == 'GET':
         os.system('shutdown now -h')
-        s = open("/home/pi/.r2_config/.shutdown", "w+")
+        s = open("/home/pi/.r2_config/.shutdown", "w+", encoding="utf-8")
         s.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
         s.flush()
         s.close()
@@ -274,7 +271,7 @@ def sendstatusinternet():
     """GET to display internet status"""
     message = ""
     if request.method == 'GET':
-        if (internet.check()):
+        if internet.check():
             message = "True"
         else:
             message = "False"

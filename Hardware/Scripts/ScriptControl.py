@@ -17,21 +17,15 @@
 # You should have received a copy of the GNU General Public License
 # along with R2_Control.  If not, see <http://www.gnu.org/licenses/>.
 # ===============================================================================
-
-from __future__ import print_function
-from __future__ import absolute_import
-from future import standard_library
+from builtins import object
 import configparser
 import glob
 import os
 import collections
-import datetime
-import time
-from r2utils import mainconfig
 from flask import Blueprint, request
+from r2utils import mainconfig
+from future import standard_library
 standard_library.install_aliases()
-from builtins import object
-
 
 _configfile = mainconfig.mainconfig['config_dir'] + 'scripts.cfg'
 
@@ -57,7 +51,9 @@ def _script_list():
     """GET gives a comma separated list of available scripts"""
     message = ""
     if request.method == 'GET':
-        message += scripts.list()
+        message = ', '.join(glob.glob("./scripts/*.scr"))
+        message = message.replace("./scripts/", "", -1)
+        message = message.replace(".scr", "", -1)
     return message
 
 
@@ -101,13 +97,8 @@ class ScriptControl(object):
         self.script_id = 1
         self.script_dir = script_dir
         if __debug__:
-            print("Starting script object with path: %s" % script_dir)
+            print(f"Starting script object with path: {script_dir}")
 
-    def list(self):
-        files = ', '.join(glob.glob("./scripts/*.scr"))
-        files = files.replace("./scripts/", "", -1)
-        files = files.replace(".scr", "", -1)
-        return files
 
     def list_running(self):
         message = ""
@@ -118,7 +109,7 @@ class ScriptControl(object):
     def stop_script(self, kill_id):
         idx = 0
         if __debug__:
-            print("Trying to stop script ID %s" % kill_id)
+            print(f"Trying to stop script ID {kill_id}")
         for script in self.running_scripts:
             if (int(script.script_id) == int(kill_id)) or (script.name == kill_id):
                 script.thread.stop()
@@ -148,7 +139,7 @@ class ScriptControl(object):
                 scripts.thread.daemon = True
                 scripts.thread.start()
         if __debug__:
-            print("Starting script %s" % script)
+            print(f"Starting script {script}")
         if loop == "1":
             print("Looping")
         else:

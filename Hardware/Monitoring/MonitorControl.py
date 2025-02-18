@@ -1,24 +1,18 @@
-#!/usr/bin/python
-# 
-from __future__ import print_function
-from __future__ import absolute_import
-from future import standard_library
+""" Module to talk to battery monitor """
 import smbus
 import time
-import threading
 import struct
 import os
 import csv
 import configparser
 from threading import Thread
 from time import sleep
+from flask import Blueprint, request
 from r2utils import mainconfig
 from r2utils import telegram
-standard_library.install_aliases()
-from builtins import map
 from builtins import range
-from flask import Blueprint, request
-
+from future import standard_library
+standard_library.install_aliases()
 
 _configfile = mainconfig.mainconfig['config_dir'] + 'monitoring.cfg'
 
@@ -29,7 +23,7 @@ _config.read(_configfile)
 
 if not os.path.isfile(_configfile):
     print("Config file does not exist (Monitoring)")
-    with open(_configfile, 'wt') as configfile:
+    with open(_configfile, 'wt', encoding="utf-8") as configfile:
         _config.write(configfile)
 
 _defaults = _config.defaults()
@@ -39,6 +33,7 @@ _logfile = _defaults['logfile']
 
 api = Blueprint('monitoring', __name__, url_prefix='/monitoring')
 
+
 @api.route('/', methods=['GET'])
 @api.route('/battery', methods=['GET'])
 def _battery():
@@ -47,6 +42,7 @@ def _battery():
     if request.method == 'GET':
         message += str(monitoring.queryBattery())
     return message
+
 
 @api.route('/balance', methods=['GET'])
 def _balance():
@@ -65,7 +61,7 @@ class _Monitoring(object):
         while True:
             try:
                 data = self.bus.read_i2c_block_data(0x04, 0)
-            except:
+            except Exception:
                 if __debug__:
                     print("Failed to read i2c data")
                 sleep(1)
@@ -99,11 +95,11 @@ class _Monitoring(object):
         self.extracted = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         try:
             self.bus = smbus.SMBus(int(mainconfig.mainconfig['busid']))
-        except:
+        except Exception:
             print("Failed to connect to device on bus")
         if __debug__:
             print("Initialising Monitoring")
-            print("Address: %s | Bus: %s | logdir: %s" % (self.address, self.bus, self.logdir))
+            print(f"Address: {self.address} | Bus: {self.bus} | logdir: {self.logdir}")
         if self.telegram:
             telegram.send("Monitoring started")
         loop = Thread(target=self.monitor_loop, args=(self.extracted, ))
