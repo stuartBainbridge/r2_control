@@ -20,5 +20,3 @@ Current commands are:
 * mute - Shut the damn thing up
 * maxvol - Go loud
 * sounds - Either on its own will give a list of sounds, or supply an MP3 name to play that sounds from the droid.
-
-
