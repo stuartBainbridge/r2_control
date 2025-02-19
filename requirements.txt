@@ -5,8 +5,8 @@ odrive>=0.6
 pygame~=2.0
 pyserial~=3.5
 Requests~=2.31.0
-RPi.GPIO~=0.7.0
+RPi.GPIO~=0.7.1
 SabertoothPacketSerial==0.2.2
-setuptools~=65.0.0
+setuptools~=70.0.0
 smbus==1.1.post2
 xbox360controller==1.1.2
